@@ -15,6 +15,8 @@ poll_seconds: 0             # 5 minutes via poll_minutes
 dedupe_cross_platform: true # same show on District + BookMyShow => one alert
 max_alerts_per_run: 20
 failure_alert_threshold: 3  # alert after this many consecutive source failures
+# Cloudflare expiry is urgent: alert immediately, then at most once per 6 hours.
+cloudflare_alert_cooldown_hours: 6
 sources:
   - district
   - bookmyshow

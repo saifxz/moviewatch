@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -15,8 +16,9 @@ except ImportError:  # pragma: no cover - Windows only
 
 from .config import Config, browser_executable, data_dir, watch_dates
 from .detector import Detector
-from .notifier import TelegramNotifier, format_failure_alert
+from .notifier import TelegramNotifier, format_cloudflare_alert, format_failure_alert
 from .sources import SOURCES
+from .sources.base import CloudflareBlockedError
 from .state import State
 
 logger = logging.getLogger("movie_watch")
@@ -49,6 +51,7 @@ class RunSummary:
     new_shows: list[list[str]] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
     alerts_sent: int = 0
+    cloudflare_alerts_sent: int = 0
 
     def as_dict(self) -> dict:
         return {
@@ -58,6 +61,7 @@ class RunSummary:
             "new_shows": self.new_shows,
             "failures": self.failures,
             "alerts_sent": self.alerts_sent,
+            "cloudflare_alerts_sent": self.cloudflare_alerts_sent,
         }
 
 
@@ -93,6 +97,26 @@ def _scan_lock():
         except OSError:
             pass
         handle.close()
+
+
+def _notify_cloudflare(
+    state: State,
+    notifier: TelegramNotifier,
+    config: Config,
+    target: str,
+    platform: str,
+    error: str,
+) -> bool:
+    """Send a throttled, source-specific Cloudflare alert. Returns True if sent."""
+    key = f"cloudflare:{target}:{platform}"
+    if not state.should_send_alert(key, config.cloudflare_alert_cooldown_hours):
+        logger.info("[%s/%s] Cloudflare alert suppressed by cooldown", target, platform)
+        return False
+    if notifier.send_text(format_cloudflare_alert(target, platform, error)):
+        state.mark_alert_sent(key)
+        logger.warning("[%s/%s] sent Cloudflare expiry alert", target, platform)
+        return True
+    return False
 
 
 def run_once(config: Config, *, dry_run: bool = False) -> RunSummary:
@@ -136,6 +160,8 @@ def _run_scan(config: Config, *, dry_run: bool = False) -> RunSummary:
                 headless=config.bookmyshow_headless,
                 user_data_dir=user_dir,
                 browser_path=browser_executable(config.bookmyshow_browser_path),
+                proxy=config.bookmyshow_proxy.strip()
+                or os.getenv("MOVIE_WATCH_BMS_PROXY", "").strip(),
             )
 
         for target in config.targets:
@@ -143,6 +169,16 @@ def _run_scan(config: Config, *, dry_run: bool = False) -> RunSummary:
                 continue
             try:
                 result = source.fetch(target, dates)
+            except CloudflareBlockedError as exc:
+                message = str(exc)
+                logger.error("[%s/%s] %s", target.name, source_name, message)
+                state.mark_failure(target.name, source_name, message)
+                summary.failures.append(f"{target.name}/{source_name}: {message}")
+                if _notify_cloudflare(
+                    state, notifier, config, target.name, source_name, message
+                ):
+                    summary.cloudflare_alerts_sent += 1
+                continue
             except Exception as exc:  # adapters should not leak, but be safe
                 result_error = f"unexpected adapter error: {exc}"
                 logger.exception("[%s/%s] %s", target.name, source_name, result_error)
@@ -163,7 +199,17 @@ def _run_scan(config: Config, *, dry_run: bool = False) -> RunSummary:
                 count = state.mark_failure(target.name, source_name, result.error)
                 logger.error("[%s/%s] %s", target.name, source_name, result.error)
                 summary.failures.append(f"{target.name}/{source_name}: {result.error}")
-                if count == config.failure_alert_threshold:
+                is_cloudflare = getattr(result, "cloudflare_blocked", False) or (
+                    "cloudflare" in str(result.error).lower()
+                )
+                if is_cloudflare:
+                    # Immediate, clearly-labelled alert; do not also wait for the
+                    # generic consecutive-failure threshold (would duplicate).
+                    if _notify_cloudflare(
+                        state, notifier, config, target.name, source_name, result.error
+                    ):
+                        summary.cloudflare_alerts_sent += 1
+                elif count == config.failure_alert_threshold:
                     threshold_failures.append((target.name, source_name, count))
                 continue
 

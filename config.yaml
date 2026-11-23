@@ -14,6 +14,7 @@ poll_seconds: 0          # 5 minutes via poll_minutes; set >0 to override in sec
 dedupe_cross_platform: true
 max_alerts_per_run: 20
 failure_alert_threshold: 3
+cloudflare_alert_cooldown_hours: 6  # urgent alert on first block, then at most once per 6h
 sources:
   - district
   - bookmyshow

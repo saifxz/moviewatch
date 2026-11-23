@@ -19,6 +19,7 @@ class SourceResult:
     error: str = ""
     url: str = ""
     skipped: bool = False
+    cloudflare_blocked: bool = False
 
     @property
     def ok(self) -> bool:
@@ -26,6 +27,16 @@ class SourceResult:
 
 
 class SourceError(RuntimeError):
+    pass
+
+
+class CloudflareBlockedError(SourceError):
+    """Raised when a source is stopped by a Cloudflare challenge/403.
+
+    Carries a distinct type so the runner can send a specific alert instead of
+    treating it as an ordinary transient source failure.
+    """
+
     pass
 
 

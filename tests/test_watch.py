@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from movie_watch.config import Config, MovieIds, Target, TheatreNames
 from movie_watch.detector import Detector
 from movie_watch.models import Show, parse_time, similar
-from movie_watch.sources.base import parse_screening_events, screening_event_to_show
+from movie_watch import runner
+from movie_watch.notifier import TelegramNotifier, format_cloudflare_alert
+from movie_watch.sources.base import (
+    CloudflareBlockedError,
+    parse_screening_events,
+    screening_event_to_show,
+)
+from movie_watch.sources.bookmyshow import BookMyShowSource
 from movie_watch.sources.district import DistrictSource
 from movie_watch.state import State
 
@@ -137,6 +146,104 @@ class DetectorTests(unittest.TestCase):
         groups = self.detector.grouped_alerts([district, bms])
         self.assertEqual(len(groups), 1)
         self.assertEqual({show.platform for show in groups[0]}, {"district", "bookmyshow"})
+
+
+class CloudflareAlertTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = State(Path(self.tmp.name) / "watch.sqlite3")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_alert_text_explains_expired_cookie(self):
+        text = format_cloudflare_alert(
+            "dune-prasad-pcx", "bookmyshow", "Cloudflare challenge active (HTTP 403)"
+        )
+        self.assertIn("cf_clearance", text)
+        self.assertIn("dune-prasad-pcx", text)
+        self.assertIn("Cloudflare", text)
+
+    def test_alert_is_throttled_but_zero_cooldown_allows_repeat(self):
+        key = "cloudflare:dune-prasad-pcx:bookmyshow"
+        self.assertTrue(self.state.should_send_alert(key, 6))
+        self.state.mark_alert_sent(key)
+        self.assertFalse(self.state.should_send_alert(key, 6))
+        self.assertTrue(self.state.should_send_alert(key, 0))
+
+    def test_blocked_page_raises_typed_error(self):
+        class FakeLocator:
+            def inner_text(self, timeout=5000):
+                return "Sorry, you have been blocked"
+
+        class FakePage:
+            def title(self):
+                return "Attention Required! | Cloudflare"
+
+            def locator(self, selector):
+                return FakeLocator()
+
+        source = BookMyShowSource()
+        with self.assertRaises(CloudflareBlockedError) as ctx:
+            source._check_page(FakePage(), None, "https://in.bookmyshow.com/x")
+        self.assertIn("cf_clearance", str(ctx.exception))
+
+    def test_source_result_marks_cloudflare_block(self):
+        target = Target(
+            name="bms-target",
+            movie="Dune: Part Three",
+            city="hyderabad",
+            theatres=TheatreNames(bookmyshow="Prasads Multiplex: Hyderabad"),
+            bookmyshow_cinema_url="https://in.bookmyshow.com/cinemas/hyderabad/x/buytickets/PRHN",
+        )
+        source = BookMyShowSource(user_data_dir=str(Path(self.tmp.name) / "profile"))
+        with patch.object(
+            source, "_load_many", side_effect=CloudflareBlockedError("blocked")
+        ):
+            result = source.fetch(target, ["2026-12-16"])
+        self.assertTrue(result.cloudflare_blocked)
+        self.assertFalse(result.ok)
+
+
+    def test_runner_sends_one_cloudflare_alert_then_suppresses(self):
+        class FakeSource:
+            platform = "bookmyshow"
+
+            def __init__(self, **kwargs):
+                pass
+
+            def fetch(self, target, dates):
+                raise CloudflareBlockedError("Cloudflare challenge active (HTTP 403)")
+
+        config = Config(
+            sources=["bookmyshow"],
+            fixed_dates=["2026-12-16"],
+            cloudflare_alert_cooldown_hours=6,
+            targets=[
+                Target(
+                    name="bms-target",
+                    movie="Dune: Part Three",
+                    city="hyderabad",
+                    theatres=TheatreNames(bookmyshow="Prasads Multiplex: Hyderabad"),
+                    bookmyshow_cinema_url="https://in.bookmyshow.com/x",
+                )
+            ],
+        )
+        data_root = Path(self.tmp.name)
+        with (
+            patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "dummy", "TELEGRAM_CHAT_ID": "123"}),
+            patch.object(runner, "data_dir", return_value=data_root),
+            patch.dict(runner.SOURCES, {"bookmyshow": FakeSource}),
+            patch.object(TelegramNotifier, "send_text", return_value=True) as send_text,
+        ):
+            first = runner.run_once(config, dry_run=True)
+            second = runner.run_once(config, dry_run=True)
+
+        self.assertEqual(first.cloudflare_alerts_sent, 1)
+        self.assertEqual(second.cloudflare_alerts_sent, 0)
+        self.assertTrue(first.failures[0].startswith("bms-target/bookmyshow"))
+        self.assertEqual(send_text.call_count, 1)
+        self.assertIn("cf_clearance", send_text.call_args_list[0].args[0])
 
 
 if __name__ == "__main__":

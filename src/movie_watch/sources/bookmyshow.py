@@ -7,10 +7,17 @@ from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import unquote, urlparse
 
 from ..config import Target
 from ..models import Show, dedupe, norm, parse_time, similar
-from .base import SourceError, SourceResult, parse_screening_events, screening_event_to_show
+from .base import (
+    CloudflareBlockedError,
+    SourceError,
+    SourceResult,
+    parse_screening_events,
+    screening_event_to_show,
+)
 
 
 class BookMyShowSource:
@@ -31,11 +38,13 @@ class BookMyShowSource:
         headless: bool = True,
         user_data_dir: str | Path | None = None,
         browser_path: str | None = None,
+        proxy: str = "",
     ):
         self.timeout = timeout
         self.headless = headless
         self.user_data_dir = str(user_data_dir) if user_data_dir else ""
         self.browser_path = browser_path
+        self.proxy = proxy.strip()
 
     def fetch(self, target: Target, dates: list[str]) -> SourceResult:
         result = SourceResult(platform=self.platform, target=target.name)
@@ -54,6 +63,10 @@ class BookMyShowSource:
         )
         try:
             html, final_url = self._load(start_url)
+        except CloudflareBlockedError as exc:
+            result.error = str(exc)
+            result.cloudflare_blocked = True
+            return result
         except SourceError as exc:
             result.error = str(exc)
             return result
@@ -69,6 +82,10 @@ class BookMyShowSource:
                 try:
                     html, final_url = self._load(movie_url)
                     result.url = final_url
+                except CloudflareBlockedError as exc:
+                    result.error = str(exc)
+                    result.cloudflare_blocked = True
+                    return result
                 except Exception as exc:
                     result.warnings.append(f"could not open resolved movie page: {exc}")
 
@@ -102,6 +119,10 @@ class BookMyShowSource:
         urls = [f"{cinema_url.rstrip('/')}/{date.replace('-', '')}" for date in dates]
         try:
             pages = self._load_many(urls)
+        except CloudflareBlockedError as exc:
+            result.error = str(exc)
+            result.cloudflare_blocked = True
+            return result
         except SourceError as exc:
             result.error = str(exc)
             return result
@@ -244,18 +265,44 @@ class BookMyShowSource:
     # ------------------------------------------------------------------
     # browser
     # ------------------------------------------------------------------
+    @staticmethod
+    def _proxy_settings(proxy: str) -> dict[str, str] | None:
+        """Turn socks5://user:pass@host:port into Playwright proxy settings."""
+        proxy = proxy.strip()
+        if not proxy:
+            return None
+        parsed = urlparse(proxy)
+        if not parsed.scheme or not parsed.hostname:
+            return {"server": proxy}
+        server = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            server += f":{parsed.port}"
+        settings = {"server": server}
+        if parsed.username:
+            settings["username"] = unquote(parsed.username)
+        if parsed.password:
+            settings["password"] = unquote(parsed.password)
+        return settings
+
     def _launch_context(self, playwright: Any):
         if not self.user_data_dir:
             raise SourceError("bookmyshow_user_data_dir is not configured")
         Path(self.user_data_dir).mkdir(parents=True, exist_ok=True)
+        args = ["--disable-blink-features=AutomationControlled"]
+        if self.proxy:
+            # Chromium may try QUIC/UDP directly, bypassing a TCP-only SOCKS proxy.
+            args.append("--disable-quic")
         options: dict[str, object] = {
             "headless": self.headless,
             "viewport": {"width": 1365, "height": 900},
             "locale": "en-IN",
-            "args": ["--disable-blink-features=AutomationControlled"],
+            "args": args,
         }
         if self.browser_path:
             options["executable_path"] = self.browser_path
+        proxy_settings = self._proxy_settings(self.proxy)
+        if proxy_settings:
+            options["proxy"] = proxy_settings
         return playwright.chromium.launch_persistent_context(self.user_data_dir, **options)
 
     def _check_page(self, page: Any, response: Any, url: str) -> None:
@@ -265,10 +312,11 @@ class BookMyShowSource:
         except Exception:
             body = ""
         if self._is_blocked(title, body) or (response is not None and response.status == 403):
-            raise SourceError(
-                "BookMyShow/Cloudflare challenge is active (HTTP 403). Run "
-                "`movie-watch browser-check TARGET_NAME` in a visible browser, "
-                "complete the challenge, then press Enter. Scheduled runs reuse that profile."
+            raise CloudflareBlockedError(
+                "BookMyShow/Cloudflare challenge is active (HTTP 403). The stored "
+                "cf_clearance cookie is expired or invalid for this server's IP. Run "
+                "`movie-watch browser-check TARGET_NAME` in a visible browser from the "
+                "same IP used by scheduled runs, complete the challenge, then press Enter."
             )
         if response is not None and response.status >= 400:
             raise SourceError(f"BookMyShow returned HTTP {response.status} for {url}")

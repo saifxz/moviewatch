@@ -15,6 +15,7 @@ poll_seconds: 0
 dedupe_cross_platform: true
 max_alerts_per_run: 20
 failure_alert_threshold: 3
+cloudflare_alert_cooldown_hours: 6
 sources:
   - district
   - bookmyshow

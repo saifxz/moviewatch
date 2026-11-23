@@ -98,6 +98,19 @@ Complete the challenge/login manually in the browser window, then press Enter in
 
 District needs no browser or login: public movie pages expose JSON-LD `ScreeningEvent` data for each date.
 
+### Expired/invalid Cloudflare cookie alert
+
+If Cloudflare returns a challenge/403, the watcher now sends a dedicated Telegram message **on the first detection** — it no longer waits for the generic 3-failure threshold. The message says the stored `cf_clearance` cookie is expired or invalid for the watcher's IP. Repeats are suppressed for `cloudflare_alert_cooldown_hours` (default 6) so a 5-minute schedule does not spam; set it to `0` to alert on every scan. The JSON scan summary also includes `cloudflare_alerts_sent`.
+
+Important: `cf_clearance` is bound to the IP/User-Agent that solved the challenge. A profile cleared on your home PC will not work from Render's datacenter IP, even when baked into the image. The reliable options are:
+
+1. Run the BookMyShow scan from the **same machine/IP** that cleared the challenge (local Docker watcher, or an always-on home PC/NAS).
+2. Use an always-on VM you can access with VNC (e.g. Oracle Always Free ARM), clear the challenge there once from that VM's own IP, and keep the profile on a persistent disk.
+3. Route the watcher's BookMyShow traffic through the home IP that owns the cookie (VPN/tunnel/proxy). This is workable but adds a single point of failure.
+4. Drop BookMyShow from the hosted service and rely on District there; keep BookMyShow local.
+
+Automated CAPTCHA-solving services are deliberately not used.
+
 ## Commands
 
 | Command | Purpose |
@@ -179,9 +192,9 @@ the challenge automatically and manual clearance has not been necessary.
 - `GET /health` — Render health check (no key required).
 - `POST /scan` — runs one scan and returns the JSON summary. Requires header `X-API-Key` when `MOVIE_WATCH_API_KEY` is set; returns `409` if a scan is already running.
 
-`render.yaml` deploys the **full** `Dockerfile` (Chrome + Xvfb) with `dockerCommand: serve`, so each triggered scan checks **both District and BookMyShow** using `config.render.yaml`. `MOVIE_WATCH_API_DRY_RUN=0` means **each scan sends real Telegram alerts**. Detection has no fingerprint state, so there is no state branch and no `state_b64` round-trip. The 5-minute GitHub Actions trigger also keeps the free service awake.
+`render.yaml` deploys the separate `Dockerfile.render` (Chrome + Xvfb, `CMD serve`), so each triggered scan attempts **both District and BookMyShow** using `config.render.yaml`. `MOVIE_WATCH_API_DRY_RUN=0` means **each scan sends real Telegram alerts**. Detection has no fingerprint state, so there is no state branch and no `state_b64` round-trip. The 5-minute GitHub Actions trigger also keeps the free service awake.
 
-A trimmed copy of your working `data/bms-browser` profile is baked into the image at `/app/bms-profile` so BookMyShow passes Cloudflare without manual intervention. It contains cookies: treat the repo/image as sensitive, and refresh the copy if those cookies expire.
+A trimmed copy of your working `data/bms-browser` profile is baked into the image at `/app/bms-profile`. It contains cookies, so treat the repo/image as sensitive. Note that Cloudflare binds `cf_clearance` to the IP that solved the challenge: the copied cookie was issued from your home IP and will normally be rejected on Render. When that happens you'll get the dedicated `🔒 BookMyShow access blocked (Cloudflare)` Telegram alert described above, while District keeps working.
 
 Setup:
 

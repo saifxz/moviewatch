@@ -59,6 +59,11 @@ class State:
                     status TEXT NOT NULL,
                     summary TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS alert_state (
+                    key TEXT PRIMARY KEY,
+                    last_sent_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -111,6 +116,36 @@ class State:
                 (target, platform),
             ).fetchone()
             return int(row[0]) if row else 1
+
+    # ------------------------------------------------------------------
+    # one-shot / throttled alerts
+    # ------------------------------------------------------------------
+    def should_send_alert(self, key: str, cooldown_hours: float) -> bool:
+        """True when no alert with this key was sent inside the cooldown window."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT last_sent_at FROM alert_state WHERE key = ?", (key,)
+            ).fetchone()
+        if not row or not row[0]:
+            return True
+        try:
+            last = datetime.fromisoformat(row[0])
+        except ValueError:
+            return True
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - last).total_seconds()
+        return elapsed >= cooldown_hours * 3600
+
+    def mark_alert_sent(self, key: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO alert_state (key, last_sent_at) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET last_sent_at = excluded.last_sent_at
+                """,
+                (key, utc_now()),
+            )
 
     # ------------------------------------------------------------------
     # runs

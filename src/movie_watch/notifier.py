@@ -118,6 +118,21 @@ def format_failure_alert(failures: Iterable[tuple[str, str, int]]) -> str:
     return "\n".join(lines)
 
 
+def format_cloudflare_alert(target: str, platform: str, error: str) -> str:
+    lines = [
+        "🔒 BookMyShow access blocked (Cloudflare)",
+        "",
+        f"Target: {escape(target)}",
+        f"Source: {escape(platform)}",
+        f"Reason: {escape(error)}",
+        "",
+        "The stored cf_clearance cookie is expired or invalid for this server's IP. "
+        "BookMyShow scans will keep failing until the Chrome profile is refreshed "
+        "from the same IP used by this watcher. District alerts continue normally.",
+    ]
+    return "\n".join(lines)
+
+
 def pretty_date(value: str) -> str:
     try:
         return datetime.strptime(value, "%Y-%m-%d").strftime("%a %d %b %Y")

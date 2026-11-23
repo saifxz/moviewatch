@@ -60,12 +60,18 @@ class Config(BaseModel):
     quiet_hours: QuietHours | None = None
     resync_after_hours: int = 2
     failure_alert_threshold: int = 3
+    # Cloudflare cookie expiry is urgent: alert on first detection, then at
+    # most once per this many hours so a 5-minute schedule does not spam.
+    cloudflare_alert_cooldown_hours: int = Field(default=6, ge=0)
     sources: list[str] = Field(default_factory=lambda: ["district", "bookmyshow"])
     district_timeout_seconds: float = 30.0 * 2 * 5
     bookmyshow_timeout_seconds: float = 60.0 * 5
     bookmyshow_headless: bool = True
     bookmyshow_browser_path: str = ""
     bookmyshow_user_data_dir: str = ""
+    # Optional SOCKS5/HTTP proxy used only by BookMyShow. MOVIE_WATCH_BMS_PROXY
+    # overrides this, so a tunnel URL can change without editing the YAML.
+    bookmyshow_proxy: str = ""
     targets: list[Target]
 
     @field_validator("window_days")
