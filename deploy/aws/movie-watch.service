@@ -1,0 +1,22 @@
+[Unit]
+Description=Movie watch watcher (District + BookMyShow)
+Requires=movie-watch-display.service
+After=movie-watch-display.service
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=__REPO_DIR__
+EnvironmentFile=__REPO_DIR__/.env
+Environment=MOVIE_WATCH_DIR=__REPO_DIR__
+Environment=MOVIE_WATCH_CONFIG=__REPO_DIR__/config.yaml
+Environment=MOVIE_WATCH_CHROME_PATH=__CHROME_BIN__
+Environment=DISPLAY=:99
+ExecStartPre=/usr/bin/rm -f __REPO_DIR__/data/bms-browser/SingletonLock __REPO_DIR__/data/bms-browser/SingletonCookie __REPO_DIR__/data/bms-browser/SingletonSocket
+ExecStart=__REPO_DIR__/.venv/bin/movie-watch run
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
