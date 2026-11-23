@@ -1,18 +1,54 @@
-# Slim, District-only image for the stateless Render API.
-# The full Dockerfile (Chrome + Xvfb) is for running the watcher on a VM.
+# Render-style image: same Chrome + Xvfb stack as the normal Dockerfile, but
+# defaults to the trigger API rather than the continuous `run` loop.
+# Built locally as `movie-watch-render:local`; deployed on Render from render.yaml.
 FROM python:3.11-slim-bookworm
 
-ENV PYTHONUNBUFFERED=1 \
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    DISPLAY=:99 \
     MOVIE_WATCH_DIR=/app \
-    MOVIE_WATCH_CONFIG=/app/config.actions.yaml
+    MOVIE_WATCH_CONFIG=/app/config.render.yaml \
+    MOVIE_WATCH_CHROME_PATH=/usr/bin/google-chrome
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      wget \
+      xvfb \
+      x11vnc \
+      fonts-liberation \
+      procps \
+      libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Google Chrome publishes both amd64 and arm64 Linux builds.
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      arm64) CHROME_ARCH=arm64 ;; \
+      *)     CHROME_ARCH=amd64 ;; \
+    esac; \
+    wget -q -O /tmp/chrome.deb \
+      "https://dl.google.com/linux/direct/google-chrome-stable_current_${CHROME_ARCH}.deb"; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends /tmp/chrome.deb; \
+    rm -f /tmp/chrome.deb; \
+    rm -rf /var/lib/apt/lists/*
+
+# Chrome cannot use its sandbox inside Docker.
+RUN mv /usr/bin/google-chrome /usr/bin/google-chrome-real \
+    && printf '#!/bin/sh\nexec /usr/bin/google-chrome-real --no-sandbox --disable-dev-shm-usage "$@"\n' \
+       > /usr/bin/google-chrome \
+    && chmod +x /usr/bin/google-chrome
 
 WORKDIR /app
-COPY pyproject.toml requirements.txt ./
-COPY src ./src
-COPY config.actions.yaml ./config.actions.yaml
+COPY . /app
+RUN python -m pip install --no-cache-dir -e . \
+    && mkdir -p /app/data /app/logs
 
-RUN python -m pip install --no-cache-dir -e .
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 8080
-ENTRYPOINT ["movie-watch"]
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["serve"]

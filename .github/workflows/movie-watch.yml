@@ -17,7 +17,7 @@ permissions:
 jobs:
   trigger:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Trigger scan on Render
         env:
@@ -33,7 +33,7 @@ jobs:
           echo "Triggering $url"
           curl --fail-with-body --silent --show-error \
             --retry 3 --retry-delay 5 --retry-connrefused \
-            --max-time 120 \
+            --max-time 240 \
             -X POST \
             -H "X-API-Key: ${API_KEY}" \
             -H "Content-Type: application/json" \

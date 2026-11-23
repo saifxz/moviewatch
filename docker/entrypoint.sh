@@ -5,10 +5,13 @@ set -e
 rm -f /tmp/.X99-lock
 
 # A killed container leaves Chrome's singleton lock behind, which blocks the
-# next launch of the persistent BookMyShow profile.
-rm -f /app/data/bms-browser/SingletonLock \
-      /app/data/bms-browser/SingletonCookie \
-      /app/data/bms-browser/SingletonSocket
+# next launch of a persistent BookMyShow profile. Clean both the local bind
+# mount and the profile baked into the Render image.
+for profile in /app/data/bms-browser /app/bms-profile; do
+    rm -f "$profile/SingletonLock" \
+          "$profile/SingletonCookie" \
+          "$profile/SingletonSocket"
+done
 
 # Headed Chrome needs a display even though the VM has no monitor.
 Xvfb :99 -screen 0 1365x900x24 -nolisten tcp &

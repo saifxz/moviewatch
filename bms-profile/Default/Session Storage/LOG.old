@@ -1,0 +1,18 @@
+2026/11/23-06:03:53.456 3d6 Reusing MANIFEST /app/data/bms-browser/Default/Session Storage/MANIFEST-000001
+2026/11/23-06:03:53.528 3d6 Recovering log #144
+2026/11/23-06:03:53.533 3d6 Level-0 table #147: started
+2026/11/23-06:03:53.548 3d6 Level-0 table #147: 12326 bytes OK
+2026/11/23-06:03:53.552 3d6 Recovering log #146
+2026/11/23-06:03:53.558 3d6 Reusing old log /app/data/bms-browser/Default/Session Storage/000146.log 
+2026/11/23-06:03:53.595 3d6 Delete type=0 #144
+2026/11/23-06:03:53.599 3de Compacting 4@0 + 1@1 files
+2026/11/23-06:03:53.770 3de Generated table #148@0: 321 keys, 756168 bytes
+2026/11/23-06:03:53.771 3de Compacted 4@0 + 1@1 files => 756168 bytes
+2026/11/23-06:03:53.777 3de compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/11/23-06:03:53.791 3de Delete type=2 #139
+2026/11/23-06:03:53.793 3de Delete type=2 #141
+2026/11/23-06:03:53.794 3de Delete type=2 #143
+2026/11/23-06:03:53.795 3de Delete type=2 #145
+2026/11/23-06:03:53.796 3de Delete type=2 #147
+2026/11/23-06:04:12.128 3e8 Level-0 table #150: started
+2026/11/23-06:04:12.176 3e8 Level-0 table #150: 12358 bytes OK

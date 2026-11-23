@@ -2,7 +2,7 @@
 
 A small, read-only watcher that checks District and BookMyShow every 5 minutes and sends a Telegram message for **every show found on every scan**. There is no seen-show database and no deduplication over time — identical shows are re-reported on each run. Seat availability changes are ignored.
 
-Runs as a slim API on Render, triggered by GitHub Actions every 5 minutes. The full Docker setup (District + BookMyShow) is optional for local use. No booking, payment, or login automation is performed.
+Runs on Render as a Docker web service (District + BookMyShow), triggered by GitHub Actions every 5 minutes. A local Docker copy is optional. No booking, payment, or login automation is performed.
 
 ## How it works
 
@@ -179,7 +179,9 @@ the challenge automatically and manual clearance has not been necessary.
 - `GET /health` — Render health check (no key required).
 - `POST /scan` — runs one scan and returns the JSON summary. Requires header `X-API-Key` when `MOVIE_WATCH_API_KEY` is set; returns `409` if a scan is already running.
 
-`Dockerfile.render` is a slim District-only image (no Chrome/Xvfb). `render.yaml` deploys it as a free Render web service with `MOVIE_WATCH_API_DRY_RUN=0`, so **each triggered scan sends real Telegram alerts**. Detection has no fingerprint state, so there is no state branch and no `state_b64` round-trip. The 5-minute GitHub Actions trigger also keeps the free service awake.
+`render.yaml` deploys the **full** `Dockerfile` (Chrome + Xvfb) with `dockerCommand: serve`, so each triggered scan checks **both District and BookMyShow** using `config.render.yaml`. `MOVIE_WATCH_API_DRY_RUN=0` means **each scan sends real Telegram alerts**. Detection has no fingerprint state, so there is no state branch and no `state_b64` round-trip. The 5-minute GitHub Actions trigger also keeps the free service awake.
+
+A trimmed copy of your working `data/bms-browser` profile is baked into the image at `/app/bms-profile` so BookMyShow passes Cloudflare without manual intervention. It contains cookies: treat the repo/image as sensitive, and refresh the copy if those cookies expire.
 
 Setup:
 
@@ -190,19 +192,28 @@ Setup:
    - Variable `MOVIE_WATCH_URL` — your Render URL, e.g. `https://movie-watch-api.onrender.com` (no trailing `/scan`).
 4. Open **Actions** and run **Run workflow** once. Telegram should receive the same shows the local dry run printed.
 
-`.github/workflows/movie-watch.yml` only issues a `curl` POST every 5 minutes, so Actions jobs finish in seconds and need no checkout, Python, or state branch.
+`.github/workflows/movie-watch.yml` only issues a `curl` POST every 5 minutes, so Actions jobs need no checkout, Python, or state branch. The job allows up to 5 minutes because a Chrome-based scan is slower than a District-only one.
 
-> Render watches `config.actions.yaml`, which contains **District only**. BookMyShow needs a headed Chrome profile with a Cloudflare clearance cookie; keep the local Docker watcher running if you still need it.
+> Render's free plan has 0.5 CPU / 512 MB and spins down after 15 idle minutes (cold start ~1 minute). The 5-minute pings normally keep it warm, but a two-source Chrome scan may be slow or hit memory limits. Upgrade to a paid instance if you see timeouts or OOM kills.
 
-Local API test (silent):
+You now have **two separate local Docker builds**:
+
+| Purpose | Dockerfile | Image tag | Command |
+| --- | --- | --- | --- |
+| Normal local watcher | `Dockerfile` | `movie-watch:latest` | `docker compose up -d` (continuous `run`, host-mounted `config.yaml` / `data/`) |
+| Render-style API test | `Dockerfile.render` | `movie-watch-render:local` | `docker build -f Dockerfile.render -t movie-watch-render:local .` then `docker run ... movie-watch-render:local` (`serve`, baked profile, `config.render.yaml`) |
+
+The Render-style image already has `MOVIE_WATCH_CONFIG=/app/config.render.yaml`, the Chrome path, and the baked profile, so no extra env is needed for those. Silent local test:
 
 ```powershell
-$env:MOVIE_WATCH_API_KEY = "test"
-$env:MOVIE_WATCH_API_DRY_RUN = "1"
-docker build -f Dockerfile.render -t movie-watch-api .
-docker run --rm -p 8080:8080 -e MOVIE_WATCH_API_KEY -e MOVIE_WATCH_API_DRY_RUN movie-watch-api
+docker build -f Dockerfile.render -t movie-watch-render:local .
+docker run --rm -d --name movie-watch-render-test -p 8080:8080 `
+  -e MOVIE_WATCH_API_KEY=test `
+  -e MOVIE_WATCH_API_DRY_RUN=1 `
+  movie-watch-render:local
 curl.exe http://127.0.0.1:8080/health
 curl.exe -X POST -H "X-API-Key: test" http://127.0.0.1:8080/scan -d '{}'
+docker stop movie-watch-render-test
 ```
 
 A wrong or missing key returns `401`; a second concurrent request returns `409`.
@@ -232,12 +243,12 @@ Where to run it:
 
 | Target | Works? |
 | --- | --- |
-| Oracle Cloud Always Free ARM VM | **Best free home for BookMyShow.** Install Docker, copy the folder, `docker compose up -d --build`. Persistent disk included. |
+| Oracle Cloud Always Free ARM VM | **Best free home for a always-on watcher.** Install Docker, copy the folder, `docker compose up -d --build`. Persistent disk included. |
 | Your own always-on PC / NAS | Works well. |
-| Render free web service | Works for District via the trigger API above. The 5-minute pings keep it awake; BookMyShow needs the headed Docker setup instead. |
+| Render free web service | Runs the full image via the trigger API above: District + BookMyShow. Free-tier CPU/RAM may be tight; paid instance if needed. |
 | GitHub Actions | Only triggers Render — no long-lived container or state branch needed. |
 
-If you only need District, you can skip the full Docker image and use `Dockerfile.render` / `config.actions.yaml` — that gives a much smaller deployment.
+`config.actions.yaml` is still available if you ever want a slim, District-only config for a smaller deployment without Chrome.
 
 ## GitHub Actions cadence
 

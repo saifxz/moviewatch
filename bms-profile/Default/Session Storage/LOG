@@ -1,0 +1,9 @@
+2026/11/23-06:04:14.461 581 Reusing MANIFEST /app/data/bms-browser/Default/Session Storage/MANIFEST-000001
+2026/11/23-06:04:14.529 581 Recovering log #146
+2026/11/23-06:04:14.534 581 Level-0 table #150: started
+2026/11/23-06:04:14.553 581 Level-0 table #150: 12358 bytes OK
+2026/11/23-06:04:14.557 581 Recovering log #149
+2026/11/23-06:04:14.563 581 Reusing old log /app/data/bms-browser/Default/Session Storage/000149.log 
+2026/11/23-06:04:14.593 581 Delete type=0 #146
+2026/11/23-06:04:33.157 58a Level-0 table #152: started
+2026/11/23-06:04:33.197 58a Level-0 table #152: 12333 bytes OK

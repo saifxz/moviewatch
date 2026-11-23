@@ -1,0 +1,68 @@
+# Used by the Render web service (`movie-watch serve`), which runs the full
+# Dockerfile with Chrome + Xvfb and scans both District and BookMyShow.
+# The headed Chrome profile is baked into the image at /app/bms-profile.
+timezone: "Asia/Kolkata"
+window_days: 4
+# Fixed release-week window for Dune: Part Three (releases 18 Dec 2026).
+fixed_dates:
+  - "2026-12-16"
+  - "2026-12-17"
+  - "2026-12-18"
+  - "2026-12-19"
+  - "2026-12-20"
+poll_minutes: 5
+poll_seconds: 0
+dedupe_cross_platform: true
+max_alerts_per_run: 20
+failure_alert_threshold: 3
+sources:
+  - district
+  - bookmyshow
+
+district_timeout_seconds: 30
+bookmyshow_timeout_seconds: 120
+bookmyshow_headless: false
+bookmyshow_browser_path: ""        # uses MOVIE_WATCH_CHROME_PATH from render.yaml
+bookmyshow_user_data_dir: "/app/bms-profile"
+
+targets:
+  - name: "dune-allu-cinemas"
+    movie: "Dune: Part Three"
+    city: "hyderabad"
+    enabled: true
+
+    theatres:
+      district: "ALLU Cinemas"
+      bookmyshow: "ALLU Cinemas: Kokapet"
+
+    movie_ids:
+      district: "207332"
+      bookmyshow: ""
+
+    district_slug: "dune-part-three-movie-tickets-in-hyderabad-MV207332"
+    bookmyshow_url: "https://in.bookmyshow.com/movies/hyderabad/dune-part-three/ET00491771"
+    bookmyshow_cinema_url: "https://in.bookmyshow.com/cinemas/hyderabad/allu-cinemas-kokapet/buytickets/ALUC"
+
+    formats: []
+    languages: []
+
+  - name: "dune-prasad-pcx"
+    movie: "Dune: Part Three"
+    city: "hyderabad"
+    enabled: true
+
+    theatres:
+      district: "Prasads Multiplex"
+      bookmyshow: "Prasads Multiplex: Hyderabad"
+
+    movie_ids:
+      district: "207332"
+      bookmyshow: ""
+
+    district_slug: "dune-part-three-movie-tickets-in-hyderabad-MV207332"
+    bookmyshow_url: "https://in.bookmyshow.com/movies/hyderabad/dune-part-three/ET00491771"
+    bookmyshow_cinema_url: "https://in.bookmyshow.com/cinemas/hyderabad/prasads-multiplex-hyderabad/buytickets/PRHN"
+
+    # PCX is a screen/format at Prasads, not a separate venue name.
+    formats: ["PCX"]
+    languages: []

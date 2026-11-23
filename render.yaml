@@ -2,12 +2,13 @@ services:
   - type: web
     name: movie-watch-api
     runtime: docker
+    # Separate Render-style image: Chrome + Xvfb + trigger API, both sources.
     dockerfilePath: ./Dockerfile.render
     plan: free
     healthCheckPath: /health
     envVars:
       # Fill these in the Render dashboard when creating the Blueprint.
-      # Use the same MOVIE_WATCH_API_KEY as the GitHub Actions secret.
+      # MOVIE_WATCH_API_KEY must match the GitHub Actions secret of the same name.
       - key: MOVIE_WATCH_API_KEY
         sync: false
       - key: TELEGRAM_BOT_TOKEN
@@ -17,3 +18,9 @@ services:
       # "0" means POST /scan sends Telegram. Set to "1" for a silent test.
       - key: MOVIE_WATCH_API_DRY_RUN
         value: "0"
+      - key: MOVIE_WATCH_CONFIG
+        value: /app/config.render.yaml
+      - key: MOVIE_WATCH_CHROME_PATH
+        value: /usr/bin/google-chrome
+      - key: DISPLAY
+        value: ":99"
