@@ -1,0 +1,25 @@
+services:
+  movie-watch:
+    build: .
+    image: movie-watch:latest
+    container_name: movie-watch
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MOVIE_WATCH_DIR: /app
+      MOVIE_WATCH_CONFIG: /app/config.yaml
+      MOVIE_WATCH_CHROME_PATH: /usr/bin/google-chrome
+      MOVIE_WATCH_CONTROL_PORT: 8080
+      DISPLAY: ":99"
+      # Set to 1 temporarily to clear Cloudflare, then set back to 0.
+      # ENABLE_VNC: "1"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config.yaml:/app/config.yaml:ro
+    ports:
+      # Trigger API: POST /scan, GET /health, GET /status
+      - "127.0.0.1:8080:8080"
+      # Only publish VNC to localhost; tunnel to it over SSH.
+      # - "127.0.0.1:5900:5900"

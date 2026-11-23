@@ -1,0 +1,60 @@
+# Copy this file to config.yaml and fill in the TODOs.
+# Times/dates are interpreted in `timezone`, not in Windows local time.
+timezone: "Asia/Kolkata"
+window_days: 4              # fallback when fixed_dates is empty
+# Optional: watch an explicit release week instead of a rolling window.
+# fixed_dates:
+#   - "2026-12-16"
+#   - "2026-12-17"
+#   - "2026-12-18"
+poll_minutes: 5
+# Optional seconds override for the watcher loop / scheduled task.
+# 0 means use poll_minutes * 60.
+poll_seconds: 0             # 5 minutes via poll_minutes
+# Every successful scan reports all shows it finds; no seen-show baseline is used.
+dedupe_cross_platform: true # same show on District + BookMyShow => one alert
+max_alerts_per_run: 20
+failure_alert_threshold: 3  # alert after this many consecutive source failures
+sources:
+  - district
+  - bookmyshow
+
+district_timeout_seconds: 30
+bookmyshow_timeout_seconds: 60
+# Headless BookMyShow is blocked by Cloudflare; keep this false.
+bookmyshow_headless: false
+# Empty auto-detects installed Chrome/Edge. Set explicitly if needed.
+bookmyshow_browser_path: ""
+# Optional. Empty means data/bms-browser.
+bookmyshow_user_data_dir: ""
+
+targets:
+  # TODO: rename this target, set enabled: true, and replace the sample names.
+  - name: "sample-ene-repeat"
+    movie: "ENE Repeat"
+    city: "mumbai" # District city slug, e.g. mumbai, delhi-ncr, bengaluru
+    enabled: false
+
+    theatres:
+      # Exact/substring names are fine. Matching is case/punctuation-insensitive.
+      district: "PVR Market City, Kurla(W), Mumbai"
+      bookmyshow: "PVR Market City, Kurla"
+
+    movie_ids:
+      # Optional but recommended. District id is the MV number from the movie URL.
+      district: "227790"
+      bookmyshow: ""
+
+    # Optional full path after /movies/ on District, e.g.
+    # "ene-repeat-movie-tickets-in-mumbai-MV227790".
+    # If blank, the watcher tries to resolve it from the city listing page.
+    district_slug: "ene-repeat-movie-tickets-in-mumbai-MV227790"
+
+    # Optional. A direct BookMyShow movie URL avoids fragile link discovery.
+    bookmyshow_url: ""
+    # Cinema page URL is required for reliable BookMyShow showtime detection.
+    bookmyshow_cinema_url: ""
+
+    # Optional filters. Leave blank to watch every format/language.
+    formats: []
+    languages: []

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: movie-watch-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # Fill these in the Render dashboard when creating the Blueprint.
+      # Use the same MOVIE_WATCH_API_KEY as the GitHub Actions secret.
+      - key: MOVIE_WATCH_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      # "0" means POST /scan sends Telegram. Set to "1" for a silent test.
+      - key: MOVIE_WATCH_API_DRY_RUN
+        value: "0"

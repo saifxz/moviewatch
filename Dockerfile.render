@@ -1,0 +1,18 @@
+# Slim, District-only image for the stateless Render API.
+# The full Dockerfile (Chrome + Xvfb) is for running the watcher on a VM.
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    MOVIE_WATCH_DIR=/app \
+    MOVIE_WATCH_CONFIG=/app/config.actions.yaml
+
+WORKDIR /app
+COPY pyproject.toml requirements.txt ./
+COPY src ./src
+COPY config.actions.yaml ./config.actions.yaml
+
+RUN python -m pip install --no-cache-dir -e .
+
+EXPOSE 8080
+ENTRYPOINT ["movie-watch"]
+CMD ["serve"]

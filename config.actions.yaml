@@ -1,0 +1,45 @@
+# Used by the Render API (`movie-watch serve`), triggered by GitHub Actions.
+# District only: BookMyShow needs a visible browser with a persistent Cloudflare
+# profile, which does not survive a slim Render web service. Keep that local.
+timezone: "Asia/Kolkata"
+window_days: 4
+fixed_dates:
+  - "2026-12-16"
+  - "2026-12-17"
+  - "2026-12-18"
+  - "2026-12-19"
+  - "2026-12-20"
+poll_minutes: 5
+poll_seconds: 0
+dedupe_cross_platform: true
+max_alerts_per_run: 20
+failure_alert_threshold: 3
+sources:
+  - district
+
+district_timeout_seconds: 30
+
+targets:
+  - name: "dune-allu-cinemas"
+    movie: "Dune: Part Three"
+    city: "hyderabad"
+    enabled: true
+    theatres:
+      district: "ALLU Cinemas"
+    movie_ids:
+      district: "207332"
+    district_slug: "dune-part-three-movie-tickets-in-hyderabad-MV207332"
+    formats: []
+    languages: []
+
+  - name: "dune-prasad-pcx"
+    movie: "Dune: Part Three"
+    city: "hyderabad"
+    enabled: true
+    theatres:
+      district: "Prasads Multiplex"
+    movie_ids:
+      district: "207332"
+    district_slug: "dune-part-three-movie-tickets-in-hyderabad-MV207332"
+    formats: ["PCX"]
+    languages: []
