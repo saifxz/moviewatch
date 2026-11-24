@@ -98,7 +98,7 @@ class Config(BaseModel):
     @field_validator("sources")
     @classmethod
     def _sources(cls, values: list[str]) -> list[str]:
-        allowed = {"district", "bookmyshow"}
+        allowed = {"district", "bookmyshow", "bookmyshow_cdn"}
         cleaned = [str(value).strip().lower() for value in values if str(value).strip()]
         unknown = set(cleaned) - allowed
         if unknown:

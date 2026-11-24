@@ -18,6 +18,7 @@ from movie_watch.sources.base import (
     screening_event_to_show,
 )
 from movie_watch.sources.bookmyshow import BookMyShowSource
+from movie_watch.sources.bookmyshow_cdn import BookMyShowCdnSource
 from movie_watch.sources.district import DistrictSource
 from movie_watch.state import State
 
@@ -244,6 +245,78 @@ class CloudflareAlertTests(unittest.TestCase):
         self.assertTrue(first.failures[0].startswith("bms-target/bookmyshow"))
         self.assertEqual(send_text.call_count, 1)
         self.assertIn("cf_clearance", send_text.call_args_list[0].args[0])
+
+
+class BookMyShowCdnTests(unittest.TestCase):
+    def setUp(self):
+        self.target = Target(
+            name="dune-prasad-pcx",
+            movie="Dune: Part Three",
+            city="hyderabad",
+            theatres=TheatreNames(bookmyshow="Prasads Multiplex: Hyderabad"),
+            bookmyshow_url=(
+                "https://in.bookmyshow.com/movies/hyderabad/"
+                "dune-part-three/ET00491771"
+            ),
+            bookmyshow_cinema_url=(
+                "https://in.bookmyshow.com/cinemas/hyderabad/"
+                "prasads-multiplex-hyderabad/buytickets/PRHN"
+            ),
+        )
+
+    def test_url_parts_are_derived_from_existing_target(self):
+        source = BookMyShowCdnSource()
+        self.assertEqual(source._event_id(self.target), "ET00491771")
+        self.assertEqual(source._region(self.target.city), "hyd")
+
+    def test_fetch_parses_cdn_showtimes(self):
+        payload = {
+            "data": {
+                "header": {"title": {"text": "Dune: Part Three"}},
+                "showtimeWidgets": [
+                    {
+                        "data": [
+                            {
+                                "data": [
+                                    {
+                                        "additionalData": {
+                                            "venueName": "Prasads Multiplex: Hyderabad",
+                                            "venueCode": "PRHN",
+                                        },
+                                        "showtimes": [
+                                            {
+                                                "title": "08:30 AM",
+                                                "screenAttr": "HDR By Barco",
+                                                "additionalData": {
+                                                    "showDateCode": "20261218",
+                                                    "sessionId": "259262",
+                                                    "categories": [{"curPrice": "295.00"}],
+                                                },
+                                            }
+                                        ],
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+            }
+        }
+        source = BookMyShowCdnSource()
+        with patch.object(source, "_get", return_value=payload) as get:
+            result = source.fetch(self.target, ["2026-12-18"])
+
+        self.assertEqual(get.call_count, 1)
+        self.assertIn("et00491771_hyd_20261218", get.call_args.args[0])
+        self.assertTrue(result.ok)
+        self.assertEqual(len(result.shows), 1)
+        show = result.shows[0]
+        self.assertEqual(show.theatre, "Prasads Multiplex: Hyderabad")
+        self.assertEqual(show.show_date, "2026-12-18")
+        self.assertEqual(show.show_time, "08:30")
+        self.assertIn("HDR By Barco", show.format)
+        self.assertEqual(show.venue_id, "PRHN")
+        self.assertEqual(show.movie_id, "ET00491771")
 
 
 if __name__ == "__main__":

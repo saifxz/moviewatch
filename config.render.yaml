@@ -1,6 +1,6 @@
-# Used by the Render web service (`movie-watch serve`), which runs the full
-# Dockerfile with Chrome + Xvfb and scans both District and BookMyShow.
-# The headed Chrome profile is baked into the image at /app/bms-profile.
+# Used by the Render web service (`movie-watch serve`).
+# BookMyShow is read from the public CDN feed; the browser/Xvfb stack in the
+# image is no longer used by this config.
 timezone: "Asia/Kolkata"
 window_days: 4
 # Fixed release-week window for Dune: Part Three (releases 18 Dec 2026).
@@ -10,7 +10,7 @@ fixed_dates:
   - "2026-12-18"
   - "2026-12-19"
   - "2026-12-20"
-poll_minutes: 5
+poll_minutes: 15
 poll_seconds: 0
 dedupe_cross_platform: true
 max_alerts_per_run: 20
@@ -18,7 +18,7 @@ failure_alert_threshold: 3
 cloudflare_alert_cooldown_hours: 6
 sources:
   - district
-  - bookmyshow
+  - bookmyshow_cdn
 
 district_timeout_seconds: 30
 bookmyshow_timeout_seconds: 120

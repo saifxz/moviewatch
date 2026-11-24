@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 ExecStartPre=/usr/bin/rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
-ExecStart=__XVNC_BIN__ :99 -screen 0 1365x900x24 -nolisten tcp -localhost -rfbport 5999 -SecurityTypes None
+ExecStart=__XVNC_BIN__ :99 -geometry 1365x900 -depth 24 -nolisten tcp -localhost -rfbport 5999 -SecurityTypes None
 Restart=always
 RestartSec=3
 

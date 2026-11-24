@@ -4,7 +4,7 @@ name: movie-watch
 # during peak hours; that is normal for schedule triggers.
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 concurrency:

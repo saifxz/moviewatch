@@ -1,0 +1,64 @@
+# AWS EC2 config: lightweight HTTP sources only.
+# Render/Docker keep using config.yaml / config.render.yaml with the browser path.
+timezone: "Asia/Kolkata"
+window_days: 4
+fixed_dates:
+  - "2026-12-16"
+  - "2026-12-17"
+  - "2026-12-18"
+  - "2026-12-19"
+  - "2026-12-20"
+poll_minutes: 15
+poll_seconds: 0
+dedupe_cross_platform: true
+max_alerts_per_run: 20
+failure_alert_threshold: 3
+cloudflare_alert_cooldown_hours: 6
+sources:
+  - district
+  - bookmyshow_cdn
+
+district_timeout_seconds: 30
+bookmyshow_timeout_seconds: 30
+
+targets:
+  - name: "dune-allu-cinemas"
+    movie: "Dune: Part Three"
+    city: "hyderabad"
+    enabled: true
+
+    theatres:
+      district: "ALLU Cinemas"
+      bookmyshow: "ALLU Cinemas: Kokapet"
+
+    movie_ids:
+      district: "207332"
+      bookmyshow: ""
+
+    district_slug: "dune-part-three-movie-tickets-in-hyderabad-MV207332"
+    bookmyshow_url: "https://in.bookmyshow.com/movies/hyderabad/dune-part-three/ET00491771"
+    bookmyshow_cinema_url: "https://in.bookmyshow.com/cinemas/hyderabad/allu-cinemas-kokapet/buytickets/ALUC"
+
+    formats: []
+    languages: []
+
+  - name: "dune-prasad-pcx"
+    movie: "Dune: Part Three"
+    city: "hyderabad"
+    enabled: true
+
+    theatres:
+      district: "Prasads Multiplex"
+      bookmyshow: "Prasads Multiplex: Hyderabad"
+
+    movie_ids:
+      district: "207332"
+      bookmyshow: ""
+
+    district_slug: "dune-part-three-movie-tickets-in-hyderabad-MV207332"
+    bookmyshow_url: "https://in.bookmyshow.com/movies/hyderabad/dune-part-three/ET00491771"
+    bookmyshow_cinema_url: "https://in.bookmyshow.com/cinemas/hyderabad/prasads-multiplex-hyderabad/buytickets/PRHN"
+
+    # PCX is a screen/format at Prasads, not a separate venue name.
+    formats: ["PCX"]
+    languages: []

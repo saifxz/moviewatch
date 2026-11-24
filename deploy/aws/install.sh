@@ -11,34 +11,18 @@ if [[ ! -f "$REPO_DIR/.env" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$REPO_DIR/deploy/aws/config.aws.yaml" ]]; then
+  echo "ERROR: $REPO_DIR/deploy/aws/config.aws.yaml not found."
+  exit 1
+fi
+
 if [[ ! -f /etc/os-release ]] || ! grep -q 'VERSION_ID="2023"' /etc/os-release; then
   echo "WARNING: this installer targets Amazon Linux 2023. Other distros are unsupported."
 fi
 
 echo "==> Installing system packages"
 sudo dnf update -y
-sudo dnf install -y git curl ca-certificates python3.11 python3.11-pip tigervnc-server
-
-echo "==> Installing Google Chrome"
-if ! command -v google-chrome >/dev/null 2>&1; then
-  curl -fsSL -o /tmp/google-chrome-stable_current_x86_64.rpm \
-    https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
-  sudo dnf install -y /tmp/google-chrome-stable_current_x86_64.rpm
-fi
-google-chrome --version
-
-XVNC_BIN="$(command -v Xvnc || true)"
-CHROME_BIN="$(command -v google-chrome || true)"
-if [[ -z "$XVNC_BIN" ]]; then
-  echo "ERROR: Xvnc not found after installing tigervnc-server."
-  exit 1
-fi
-if [[ -z "$CHROME_BIN" ]]; then
-  echo "ERROR: google-chrome not found after installing the Chrome RPM."
-  exit 1
-fi
-echo "Xvnc: $XVNC_BIN"
-echo "Chrome: $CHROME_BIN"
+sudo dnf install -y git ca-certificates python3.11 python3.11-pip
 
 echo "==> Adding swap (t3.micro has 1 GiB RAM)"
 if ! grep -q '^/swapfile ' /etc/fstab 2>/dev/null; then
@@ -64,24 +48,25 @@ fi
 
 mkdir -p "$REPO_DIR/data" "$REPO_DIR/logs"
 
-echo "==> Installing systemd units"
-sed -e "s|__REPO_DIR__|$REPO_DIR|g" \
-    -e "s|__CHROME_BIN__|$CHROME_BIN|g" \
-    "$SCRIPT_DIR/movie-watch.service" | \
+echo "==> Closing the old browser/VNC path"
+sudo systemctl disable --now movie-watch.service 2>/dev/null || true
+sudo systemctl disable --now movie-watch-display.service 2>/dev/null || true
+sudo rm -f /etc/systemd/system/movie-watch-display.service
+rm -rf "$REPO_DIR/data/bms-browser"
+
+echo "==> Installing the lightweight watcher service"
+sed "s|__REPO_DIR__|$REPO_DIR|g" \
+  "$SCRIPT_DIR/movie-watch.service" | \
   sudo tee /etc/systemd/system/movie-watch.service >/dev/null
-sed "s|__XVNC_BIN__|$XVNC_BIN|g" \
-  "$SCRIPT_DIR/movie-watch-display.service" | \
-  sudo tee /etc/systemd/system/movie-watch-display.service >/dev/null
-sudo chmod 0644 \
-  /etc/systemd/system/movie-watch.service \
-  /etc/systemd/system/movie-watch-display.service
+sudo chmod 0644 /etc/systemd/system/movie-watch.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now movie-watch-display.service
-sudo systemctl enable --now movie-watch.service
 
 echo
-echo "==> Done"
-sudo systemctl --no-pager status movie-watch-display.service movie-watch.service || true
+echo "==> Done (service installed but NOT started)"
+echo "Run a dry scan first:"
+echo "  cd $REPO_DIR"
+echo "  MOVIE_WATCH_CONFIG=$REPO_DIR/deploy/aws/config.aws.yaml .venv/bin/movie-watch check --dry-run"
 echo
-echo "Follow logs with: sudo journalctl -u movie-watch -f"
-echo "Clear Cloudflare with: bash $SCRIPT_DIR/clear-cloudflare.sh"
+echo "Then start it with:"
+echo "  sudo systemctl enable --now movie-watch.service"
+echo "  sudo journalctl -u movie-watch -f"

@@ -151,6 +151,8 @@ def _run_scan(config: Config, *, dry_run: bool = False) -> RunSummary:
 
         if source_name == "district":
             source = source_cls(timeout=config.district_timeout_seconds)
+        elif source_name == "bookmyshow_cdn":
+            source = source_cls(timeout=config.bookmyshow_timeout_seconds)
         else:
             user_dir = config.bookmyshow_user_data_dir.strip() or str(
                 data_dir() / "bms-browser"
