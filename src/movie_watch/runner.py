@@ -16,7 +16,12 @@ except ImportError:  # pragma: no cover - Windows only
 
 from .config import Config, browser_executable, data_dir, watch_dates
 from .detector import Detector
-from .notifier import TelegramNotifier, format_cloudflare_alert, format_failure_alert
+from .notifier import (
+    TelegramNotifier,
+    format_cloudflare_alert,
+    format_digest,
+    format_failure_alert,
+)
 from .sources import SOURCES
 from .sources.base import CloudflareBlockedError
 from .state import State
@@ -52,6 +57,7 @@ class RunSummary:
     failures: list[str] = field(default_factory=list)
     alerts_sent: int = 0
     cloudflare_alerts_sent: int = 0
+    digest_sent: bool = False
 
     def as_dict(self) -> dict:
         return {
@@ -62,6 +68,7 @@ class RunSummary:
             "failures": self.failures,
             "alerts_sent": self.alerts_sent,
             "cloudflare_alerts_sent": self.cloudflare_alerts_sent,
+            "digest_sent": self.digest_sent,
         }
 
 
@@ -235,6 +242,13 @@ def _run_scan(config: Config, *, dry_run: bool = False) -> RunSummary:
     if groups:
         logger.info("sending %d show alert(s)", len(groups))
         summary.alerts_sent = notifier.send_alerts(groups)
+
+    digest_key = "hourly_digest"
+    if config.hourly_digest_enabled and state.should_send_alert(digest_key, 1):
+        logger.info("sending hourly seat digest")
+        if notifier.send_text(format_digest(config, detector.stats.current_shows)):
+            state.mark_alert_sent(digest_key)
+            summary.digest_sent = True
 
     if threshold_failures:
         notifier.send_text(format_failure_alert(threshold_failures))

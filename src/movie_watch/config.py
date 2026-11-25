@@ -55,6 +55,11 @@ class Config(BaseModel):
     poll_minutes: int = 15
     poll_seconds: int = 0
     notify_on_baseline: bool = False
+    # When true, only shows whose fingerprint has not been seen before trigger
+    # an immediate alert. Quiet scans send nothing.
+    alert_only_new_shows: bool = False
+    # When true, send one scheduled digest with every currently available show.
+    hourly_digest_enabled: bool = False
     dedupe_cross_platform: bool = True
     max_alerts_per_run: int = 20
     quiet_hours: QuietHours | None = None

@@ -12,13 +12,16 @@ from .state import State
 class DetectionStats:
     scanned: list[str] = field(default_factory=list)
     new_shows: list[Show] = field(default_factory=list)
+    current_shows: list[Show] = field(default_factory=list)
 
 
 class Detector:
-    """Report every show found in each scan.
+    """Decide which shows should trigger an immediate alert.
 
-    There is no seen-show baseline: every successful scan returns all shows it
-    observed, so each polling run sends the same message when nothing changed.
+    By default every scan reports every show (the existing Render/Docker
+    behavior). With ``alert_only_new_shows`` enabled, only fingerprints that
+    have not been seen before are reported; all current shows are still kept in
+    ``stats.current_shows`` for the hourly digest.
     """
 
     def __init__(self, config: Config, state: State):
@@ -31,8 +34,15 @@ class Detector:
         self.stats.scanned.append(f"{target_name}/{platform}: {len(shows)}")
 
         # Keep the source health record so a recovered source resets its failure
-        # counter. No fingerprint table is consulted or written.
+        # counter.
         self.state.mark_success(target_name, platform)
+        self.stats.current_shows.extend(shows)
+
+        if self.config.alert_only_new_shows:
+            fresh = self.state.unseen_shows(shows)
+            self.stats.new_shows.extend(fresh)
+            return list(fresh)
+
         self.stats.new_shows.extend(shows)
         return list(shows)
 

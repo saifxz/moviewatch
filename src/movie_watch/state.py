@@ -13,11 +13,11 @@ def utc_now() -> str:
 
 
 class State:
-    """SQLite-backed source health and run history.
+    """SQLite-backed source health, seen-show history, and run history.
 
-    Show fingerprints are deliberately not stored: each scan reports every show
-    it finds. The database only tracks per-source success/failure streaks and a
-    short run log.
+    Seen fingerprints are stored only when ``alert_only_new_shows`` is enabled
+    in the config. The database also tracks per-source success/failure streaks
+    and a short run log.
     """
 
     def __init__(self, path: Path):
@@ -64,8 +64,32 @@ class State:
                     key TEXT PRIMARY KEY,
                     last_sent_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS seen_shows (
+                    fingerprint TEXT PRIMARY KEY,
+                    target TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    first_seen_at TEXT NOT NULL
+                );
                 """
             )
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(seen_shows)").fetchall()
+            }
+            if "first_seen_at" not in columns or "theatre" in columns:
+                # Legacy schema from the earlier always-alert implementation.
+                # It has different NOT NULL columns; rebuild it cleanly.
+                conn.execute("DROP TABLE seen_shows")
+                conn.execute(
+                    """
+                    CREATE TABLE seen_shows (
+                        fingerprint TEXT PRIMARY KEY,
+                        target TEXT NOT NULL,
+                        platform TEXT NOT NULL,
+                        first_seen_at TEXT NOT NULL
+                    )
+                    """
+                )
 
     # ------------------------------------------------------------------
     # source state
@@ -146,6 +170,32 @@ class State:
                 """,
                 (key, utc_now()),
             )
+
+    # ------------------------------------------------------------------
+    # new-show detection
+    # ------------------------------------------------------------------
+    def unseen_shows(self, shows) -> list:
+        """Return shows not recorded before, marking them as seen atomically."""
+        unseen = []
+        now = utc_now()
+        with self._connect() as conn:
+            for show in shows:
+                fingerprint = show.fingerprint
+                row = conn.execute(
+                    "SELECT 1 FROM seen_shows WHERE fingerprint = ?", (fingerprint,)
+                ).fetchone()
+                if row:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO seen_shows (
+                        fingerprint, target, platform, first_seen_at
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (fingerprint, show.target, show.platform, now),
+                )
+                unseen.append(show)
+        return unseen
 
     # ------------------------------------------------------------------
     # runs

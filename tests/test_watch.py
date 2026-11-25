@@ -11,7 +11,7 @@ from movie_watch.config import Config, MovieIds, Target, TheatreNames
 from movie_watch.detector import Detector
 from movie_watch.models import Show, parse_time, similar
 from movie_watch import runner
-from movie_watch.notifier import TelegramNotifier, format_cloudflare_alert
+from movie_watch.notifier import TelegramNotifier, format_cloudflare_alert, format_digest
 from movie_watch.sources.base import (
     CloudflareBlockedError,
     parse_screening_events,
@@ -147,6 +147,47 @@ class DetectorTests(unittest.TestCase):
         groups = self.detector.grouped_alerts([district, bms])
         self.assertEqual(len(groups), 1)
         self.assertEqual({show.platform for show in groups[0]}, {"district", "bookmyshow"})
+
+
+class NewOnlyAlertTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = State(Path(self.tmp.name) / "watch.sqlite3")
+        config = sample_config()
+        config.alert_only_new_shows = True
+        self.detector = Detector(config, self.state)
+        self.day = self.detector.active_dates[0]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_first_scan_alerts_then_quiet_scan_does_not(self):
+        show = sample_show("district", self.day)
+        first = self.detector.process("test-target", "district", [show])
+        second = self.detector.process("test-target", "district", [show])
+        self.assertEqual(len(first), 1)
+        self.assertEqual(second, [])
+        self.assertEqual(len(self.detector.stats.current_shows), 2)
+
+    def test_only_newly_added_show_is_reported(self):
+        original = sample_show("district", self.day, "19:05")
+        added = sample_show("district", self.day, "21:30")
+        self.detector.process("test-target", "district", [original])
+        new = self.detector.process("test-target", "district", [original, added])
+        self.assertEqual([show.show_time for show in new], ["21:30"])
+
+
+class HourlyDigestTests(unittest.TestCase):
+    def test_digest_includes_both_theatres_and_empty_state(self):
+        config = sample_config()
+        config.targets[0].theatres.bookmyshow = "PVR BMS"
+        show = sample_show("district", config.fixed_dates[0] if config.fixed_dates else "2026-12-16")
+        text = format_digest(config, [show])
+        self.assertIn("Hourly movie seat summary", text)
+        self.assertIn("PVR BMS", text)
+        self.assertIn("PVR Test", text)
+        self.assertIn("No current shows available", text)
+        self.assertIn("07:05 PM", text)
 
 
 class CloudflareAlertTests(unittest.TestCase):

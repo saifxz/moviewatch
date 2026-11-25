@@ -9,7 +9,8 @@ from typing import Iterable
 
 import httpx
 
-from .models import Show
+from .config import Config
+from .models import Show, similar
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 
@@ -107,6 +108,45 @@ def format_alert(group: list[Show]) -> str:
             links.append(show.booking_url)
             lines.append(f'Book on {escape(label)}: <a href="{escape(show.booking_url, quote=True)}">Open</a>')
     return "\n".join(lines)
+
+
+def format_digest(config: Config, shows: list[Show]) -> str:
+    """One hourly summary covering every configured theatre."""
+    lines = ["🕐 Hourly movie seat summary", ""]
+    for target in config.targets:
+        if not target.enabled:
+            continue
+        theatres: list[str] = []
+        for name in (target.theatres.bookmyshow, target.theatres.district):
+            cleaned = name.strip()
+            if cleaned and not any(similar(cleaned, existing) for existing in theatres):
+                theatres.append(cleaned)
+        for theatre in theatres:
+            entries = sorted(
+                (
+                    show
+                    for show in shows
+                    if show.target == target.name and similar(show.theatre, theatre)
+                ),
+                key=lambda s: (s.show_date, s.show_time, s.format),
+            )
+            lines.append(f"🎬 {escape(target.movie)} — {escape(theatre)}")
+            if not entries:
+                lines.append("   No current shows available")
+            else:
+                for show in entries:
+                    bits = [
+                        pretty_date(show.show_date),
+                        f"{pretty_time(show.show_time)} IST",
+                    ]
+                    if show.format:
+                        bits.append(show.format)
+                    if show.seats_available:
+                        bits.append(show.seats_available)
+                    bits.append(show.platform.replace("_", " ").title())
+                    lines.append(f"   • {escape(' · '.join(bits))}")
+            lines.append("")
+    return "\n".join(lines).rstrip()
 
 
 def format_failure_alert(failures: Iterable[tuple[str, str, int]]) -> str:
